@@ -1,4 +1,4 @@
-﻿import * as Blockly from 'blockly/core';
+import * as Blockly from 'blockly/core';
 import { javascriptGenerator } from 'blockly/javascript';
 
 // Define custom blocks
