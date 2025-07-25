@@ -90,6 +90,519 @@ export default function UniTechEditor() {
         setOutputText(prev => prev + "\n> Switched to " + kit);
     };
 
+    // Function to fix the flyout height and add appropriate scroll space
+    const fixFlyoutHeight = () => {
+        // Small delay to ensure the DOM is ready
+        setTimeout(() => {
+            // Find the flyout
+            const flyout = document.querySelector('.blocklyFlyout');
+            if (!flyout) return;
+
+            // Make sure the flyout is properly positioned
+            flyout.style.top = '60px';
+            flyout.style.bottom = '0';
+            flyout.style.height = 'auto';
+            flyout.style.maxHeight = 'none';
+            flyout.style.overflowY = 'auto'; // Changed from scroll to auto
+            flyout.style.paddingRight = '10px';
+
+            // Make sure there's proper margin around the content
+            const flyoutContent = flyout.querySelector('.blocklyFlyoutContent');
+            if (flyoutContent) {
+                flyoutContent.style.paddingLeft = '10px';
+                flyoutContent.style.paddingRight = '15px';
+                flyoutContent.style.paddingBottom = '60px'; // Reduced from 3000px
+                flyoutContent.style.marginBottom = '60px'; // Reduced from 200px
+            }
+
+            // Add margins to all blocks
+            const allBlocks = flyout.querySelectorAll('.blocklyFlyoutButton, .blocklyFlyoutBlock');
+            allBlocks.forEach(block => {
+                block.style.marginTop = '8px';
+                block.style.marginBottom = '8px';
+                block.style.marginLeft = '5px';
+                block.style.marginRight = '10px';
+            });
+
+            // Add moderate margin to last block if it exists
+            if (allBlocks.length > 0) {
+                const lastBlock = allBlocks[allBlocks.length - 1];
+                lastBlock.style.marginBottom = '60px'; // Reduced from 1000px
+            }
+
+            // Get the SVG within the flyout
+            const flyoutSvg = flyout.querySelector('svg');
+            if (flyoutSvg) {
+                // Calculate a more reasonable height based on content
+                // Get the height of all blocks plus some extra space
+                let totalHeight = 0;
+                allBlocks.forEach(block => {
+                    const rect = block.getBoundingClientRect();
+                    totalHeight += rect.height + 16; // height plus margins
+                });
+
+                // Add extra space for the flyout to be scrollable
+                totalHeight += 200; // Just enough extra space
+
+                // Set the SVG height to this calculated height
+                flyoutSvg.setAttribute('height', totalHeight);
+                flyoutSvg.style.height = `${totalHeight}px`;
+
+                // Find the background rectangle
+                const background = flyout.querySelector('.blocklyFlyoutBackground');
+                if (background) {
+                    background.setAttribute('height', totalHeight);
+                }
+
+                // Find and modify any clip paths
+                const clipPaths = document.querySelectorAll('clipPath');
+                clipPaths.forEach(clipPath => {
+                    const rect = clipPath.querySelector('rect');
+                    if (rect) {
+                        rect.setAttribute('height', totalHeight);
+                    }
+                });
+            }
+
+            // Add a style tag to ensure consistent styling
+            let styleElement = document.getElementById('blockly-extra-scroll-style');
+            if (!styleElement) {
+                styleElement = document.createElement('style');
+                styleElement.id = 'blockly-extra-scroll-style';
+                styleElement.innerHTML = `
+                    .blocklyFlyout {
+                        overflow-y: auto !important;
+                        scrollbar-width: thin !important;
+                        padding-right: 10px !important;
+                    }
+                    
+                    .blocklyFlyoutContent {
+                        padding-bottom: 60px !important;
+                        padding-left: 10px !important;
+                        padding-right: 15px !important;
+                    }
+                    
+                    .blocklyFlyoutButton, .blocklyFlyoutBlock {
+                        margin-top: 8px !important;
+                        margin-bottom: 8px !important;
+                        margin-left: 5px !important;
+                        margin-right: 10px !important;
+                    }
+                    
+                    .blocklyFlyoutButton:last-child, 
+                    .blocklyFlyoutBlock:last-child {
+                        margin-bottom: 60px !important;
+                    }
+                    
+                    /* Create a scrollbar thumb that's always visible */
+                    .blocklyFlyout::-webkit-scrollbar {
+                        width: 8px !important;
+                        background: rgba(15, 23, 42, 0.6) !important;
+                    }
+                    
+                    .blocklyFlyout::-webkit-scrollbar-thumb {
+                        background: rgba(99, 102, 241, 0.5) !important;
+                        border-radius: 4px !important;
+                        min-height: 40px !important;
+                    }
+                `;
+                document.head.appendChild(styleElement);
+            }
+
+            // Add a small spacer at the bottom if needed
+            if (flyoutContent) {
+                // Remove any existing giant spacer
+                const oldSpacer = flyoutContent.querySelector('.blockly-scroll-spacer');
+                if (oldSpacer) {
+                    oldSpacer.remove();
+                }
+
+                // Add a small spacer if needed
+                let scrollSpacer = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                scrollSpacer.setAttribute('class', 'blockly-scroll-spacer');
+                scrollSpacer.setAttribute('width', '1');
+                scrollSpacer.setAttribute('height', '60'); // Reduced from 3000
+                scrollSpacer.setAttribute('x', '10');
+                scrollSpacer.setAttribute('y', totalHeight - 60); // Position at the bottom
+                scrollSpacer.setAttribute('fill', 'transparent');
+                scrollSpacer.setAttribute('stroke', 'none');
+                flyoutContent.appendChild(scrollSpacer);
+            }
+
+        }, 100);
+    };
+
+    // Override Blockly's flyout creation to always make it tall enough and scrollable
+    const overrideBlocklyFlyout = () => {
+        // Store the original show function
+        const originalShow = Blockly.VerticalFlyout.prototype.show;
+
+        // Override the show function
+        Blockly.VerticalFlyout.prototype.show = function (xmlList) {
+            // Call the original show function
+            originalShow.call(this, xmlList);
+
+            // After showing, fix the height and add scroll space
+            setTimeout(() => {
+                // Make sure the flyout is scrollable
+                this.svgGroup_.parentNode.style.overflowY = 'scroll';
+
+                // Add massive height to SVG
+                if (this.svgGroup_) {
+                    this.svgGroup_.setAttribute('height', '5000');
+                    this.svgGroup_.style.height = '5000px';
+                }
+
+                // Set height on the background
+                if (this.svgBackground_) {
+                    this.svgBackground_.setAttribute('height', '5000');
+                }
+
+                // Ensure the content has massive padding
+                const contentGroup = this.workspace_.getCanvas();
+                if (contentGroup) {
+                    // Find the flyout content
+                    const flyoutContent = this.svgGroup_.querySelector('.blocklyFlyoutContent');
+                    if (flyoutContent) {
+                        flyoutContent.style.paddingBottom = '3000px';
+                    }
+
+                    // Add a spacer rectangle at the bottom for extra scroll space
+                    let spacer = contentGroup.querySelector('.blockly-scroll-spacer');
+                    if (!spacer) {
+                        spacer = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        spacer.setAttribute('class', 'blockly-scroll-spacer');
+                        spacer.setAttribute('width', '10');
+                        spacer.setAttribute('height', '3000');
+                        spacer.setAttribute('x', '10');
+                        spacer.setAttribute('y', '1000');
+                        spacer.setAttribute('fill', 'transparent');
+                        contentGroup.appendChild(spacer);
+                    }
+                }
+
+                // Force a redraw to ensure changes take effect
+                this.position();
+
+                // Call our external fix function as well for good measure
+                fixFlyoutHeight();
+
+            }, 0);
+        };
+
+        // Also override the position method to maintain scroll position
+        const originalPosition = Blockly.VerticalFlyout.prototype.position;
+        Blockly.VerticalFlyout.prototype.position = function () {
+            // Store current scroll position
+            const scrollTop = this.svgGroup_.parentNode.scrollTop;
+
+            // Call original method
+            originalPosition.call(this);
+
+            // Restore scroll position
+            this.svgGroup_.parentNode.scrollTop = scrollTop;
+
+            // Re-apply our scroll fixes
+            setTimeout(fixFlyoutHeight, 0);
+        };
+    };
+
+    // Load space background image on component mount
+    useEffect(() => {
+        // Create and inject a space background style at the top level
+        const styleTag = document.createElement('style');
+        styleTag.innerHTML = `
+            @keyframes rotate-galaxy {
+                0% { transform: rotate(0deg) scale(1); }
+                50% { transform: rotate(180deg) scale(1.1); }
+                100% { transform: rotate(360deg) scale(1); }
+            }
+            
+            @keyframes drift-galaxy {
+                0% { background-position: 0% 0%; }
+                50% { background-position: 20% 10%; }
+                100% { background-position: 0% 0%; }
+            }
+            
+            @keyframes twinkle-stars {
+                0%, 100% { opacity: 0.7; }
+                50% { opacity: 1; }
+            }
+            
+            @keyframes parallax-stars {
+                0% { transform: translateY(0) translateX(0); }
+                25% { transform: translateY(-5px) translateX(5px); }
+                50% { transform: translateY(-10px) translateX(0); }
+                75% { transform: translateY(-5px) translateX(-5px); }
+                100% { transform: translateY(0) translateX(0); }
+            }
+            
+            @keyframes nebula-glow {
+                0% { opacity: 0.5; filter: hue-rotate(0deg); }
+                33% { opacity: 0.7; filter: hue-rotate(30deg); }
+                66% { opacity: 0.6; filter: hue-rotate(60deg); }
+                100% { opacity: 0.5; filter: hue-rotate(0deg); }
+            }
+            
+            body {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+                background-color: #050520 !important;
+                position: relative;
+            }
+            
+            /* Main galaxy background with rotation */
+            .rotating-galaxy-1 {
+                position: fixed;
+                top: -20%;
+                left: -20%;
+                width: 140%;
+                height: 140%;
+                background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=2832&auto=format&fit=crop');
+                background-size: cover;
+                background-position: center center;
+                opacity: 0.8;
+                animation: rotate-galaxy 120s infinite linear;
+                z-index: -4;
+            }
+            
+            /* Second galaxy layer rotating opposite direction */
+            .rotating-galaxy-2 {
+                position: fixed;
+                top: -30%;
+                left: -30%;
+                width: 160%;
+                height: 160%;
+                background-image: url('https://images.unsplash.com/photo-1506703719100-a0b3a494befc?q=80&w=2070&auto=format&fit=crop');
+                background-size: cover;
+                background-position: center center;
+                opacity: 0.3;
+                animation: rotate-galaxy 180s infinite linear reverse;
+                z-index: -3;
+                mix-blend-mode: screen;
+            }
+            
+            /* Colorful nebula overlay */
+            .nebula-layer {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: 
+                    radial-gradient(circle at 30% 20%, rgba(147, 51, 234, 0.3) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 40%, rgba(236, 72, 153, 0.2) 0%, transparent 60%),
+                    radial-gradient(circle at 10% 70%, rgba(6, 182, 212, 0.2) 0%, transparent 50%);
+                animation: nebula-glow 20s infinite ease-in-out;
+                mix-blend-mode: screen;
+                z-index: -2;
+            }
+            
+            /* Distant stars with parallax */
+            .parallax-stars {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                width: 100%;
+                height: 100%;
+                background-image: 
+                    radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 2px),
+                    radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 1px),
+                    radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 2px);
+                background-size: 550px 550px, 350px 350px, 250px 250px;
+                background-position: 0 0, 40px 60px, 130px 270px;
+                animation: parallax-stars 15s infinite ease-in-out;
+                z-index: -2;
+            }
+            
+            /* Background stars that twinkle */
+            .twinkling-stars-1 {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                width: 100%;
+                height: 100%;
+                background-image: 
+                    radial-gradient(white, rgba(255,255,255,.3) 1px, transparent 2px),
+                    radial-gradient(white, rgba(255,255,255,.2) 1px, transparent 1px);
+                background-size: 300px 300px, 200px 200px;
+                background-position: 20px 20px, 50px 50px;
+                animation: twinkle-stars 4s infinite alternate;
+                z-index: -1;
+            }
+            
+            /* Larger stars with different timing */
+            .twinkling-stars-2 {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                width: 100%;
+                height: 100%;
+                background-image: 
+                    radial-gradient(white, rgba(255,255,255,.4) 2px, transparent 3px),
+                    radial-gradient(white, rgba(255,255,255,.3) 1px, transparent 2px);
+                background-size: 400px 400px, 300px 300px;
+                background-position: 100px 150px, 200px 250px;
+                animation: twinkle-stars 6s infinite alternate-reverse;
+                z-index: -1;
+            }
+            
+            /* Blockly flyout customization */
+            .blocklyFlyout {
+                top: 60px !important;
+                bottom: 0 !important;
+                height: auto !important;
+                overflow-y: auto !important; /* Changed from scroll to auto */
+                overflow-x: hidden !important;
+                padding-right: 10px !important;
+            }
+            
+            .blocklyFlyoutContent {
+                margin-top: 10px !important;
+                padding-top: 10px !important;
+                padding-bottom: 60px !important; /* Reduced from 3000px */
+                margin-bottom: 60px !important; /* Reduced from 200px */
+                padding-left: 10px !important;
+                padding-right: 15px !important;
+            }
+            
+            /* Add margin to all blocks in flyout */
+            .blocklyFlyoutButton, .blocklyFlyoutBlock {
+                margin-top: 8px !important;
+                margin-bottom: 8px !important;
+                margin-left: 5px !important;
+                margin-right: 10px !important;
+            }
+            
+            /* Last block gets moderate margin */
+            .blocklyFlyoutButton:last-child, 
+            .blocklyFlyoutBlock:last-child {
+                margin-bottom: 60px !important; /* Reduced from 1000px */
+            }
+            
+            /* Custom scrollbar styles */
+            .blocklyFlyout::-webkit-scrollbar {
+                width: 8px !important;
+            }
+            
+            .blocklyFlyout::-webkit-scrollbar-track {
+                background: rgba(15, 23, 42, 0.6) !important; 
+            }
+            
+            .blocklyFlyout::-webkit-scrollbar-thumb {
+                background: rgba(99, 102, 241, 0.5) !important;
+                border-radius: 4px !important;
+            }
+            
+            /* Customize toolbox styles */
+            .blocklyToolboxDiv {
+                background-color: rgba(18, 24, 58, 0.9) !important;
+                backdrop-filter: blur(8px) !important;
+                color: #ffffff !important;
+                width: 240px !important;
+                overflow-y: auto !important;
+                top: 60px !important;
+                bottom: 0 !important;
+                height: auto !important;
+                box-sizing: border-box !important;
+                border: none !important;
+                box-shadow: 3px 0 15px rgba(0, 0, 0, 0.3) !important;
+                border-radius: 0 !important;
+                font-size: 14px !important;
+                font-family: 'Fredoka', 'Comic Sans MS', sans-serif !important;
+                z-index: 9999 !important;
+            }
+            
+            /* Toolbox categories */
+            .blocklyTreeRow {
+                border-radius: 12px !important;
+                margin: 6px 8px !important;
+                padding: 8px 12px !important;
+                transition: all 0.2s ease !important;
+            }
+            
+            .blocklyTreeRow:hover {
+                background-color: rgba(99, 102, 241, 0.2) !important;
+                transform: translateX(5px) !important;
+            }
+            
+            .blocklyTreeSelected {
+                background-color: rgba(99, 102, 241, 0.3) !important;
+            }
+            
+            /* Make all tree labels white */
+            .blocklyTreeLabel {
+                font-family: 'Fredoka', 'Comic Sans MS', sans-serif !important;
+                font-size: 15px !important;
+                font-weight: 500 !important;
+                color: white !important;
+                fill: white !important;
+            }
+            
+            /* Make the blockly workspace transparent */
+            .blocklyMainBackground {
+                fill: rgba(10, 10, 41, 0.7) !important;
+            }
+            
+            /* Make the selected blocks pop with a glow */
+            .blocklySelected > .blocklyPath {
+                filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.5)) !important;
+                stroke: #818cf8 !important;
+                stroke-width: 3px !important;
+            }
+            
+            /* Make the block text white */
+            .blocklyText {
+                font-family: 'Fredoka', 'Comic Sans MS', sans-serif !important;
+                font-size: 14px !important;
+                fill: white !important;
+            }
+            
+            .blocklyEditableText > text {
+                fill: white !important;
+            }
+            
+            .blocklyDropdownText {
+                fill: white !important;
+            }
+            
+            .blocklyFlyoutLabelText {
+                fill: white !important;
+            }
+            
+            .blocklyFlyoutButton > text {
+                fill: white !important;
+            }
+            
+            /* Animation keyframes */
+            @keyframes pulse {
+                0% { opacity: 0.7; transform: scale(0.9); box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
+                50% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 15px rgba(255, 255, 255, 0.9); }
+                100% { opacity: 0.7; transform: scale(0.9); box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
+            }
+            
+            @keyframes scanline {
+                0% { background-position: 0 0; }
+                100% { background-position: 0 100%; }
+            }
+        `;
+        document.head.appendChild(styleTag);
+
+        return () => {
+            // Clean up the style tag when component unmounts
+            if (styleTag.parentNode) {
+                document.head.removeChild(styleTag);
+            }
+        };
+    }, []);
+
     // Initialize Blockly workspace
     useEffect(() => {
         if (!blocklyDivRef.current) return;
@@ -226,6 +739,9 @@ export default function UniTechEditor() {
             }
         });
 
+        // Override Blockly's flyout creation to always make it tall enough
+        overrideBlocklyFlyout();
+
         // Inject Blockly with specific configuration
         const workspace = Blockly.inject(blocklyDivRef.current, {
             toolbox: toolbox,
@@ -252,24 +768,10 @@ export default function UniTechEditor() {
             theme: kidSpaceTheme,
             toolboxPosition: "start",
             horizontalLayout: false,
-            renderer: 'zelos', // Use the rounded, modern renderer for a kid-friendly look
-            // Set the position of the toolbox
-            toolboxConfig: {
-                position: {
-                    top: 60
-                }
-            }
+            renderer: 'zelos' // Use the rounded, modern renderer for a kid-friendly look
         });
 
         workspaceRef.current = workspace;
-
-        // Fix flyout position after initialization
-        setTimeout(() => {
-            const flyout = document.querySelector('.blocklyFlyout');
-            if (flyout) {
-                flyout.style.top = '60px';
-            }
-        }, 100);
 
         // Add change listener to update code
         workspace.addChangeListener((event) => {
@@ -284,299 +786,40 @@ export default function UniTechEditor() {
                     console.log('Error generating code:', e);
                 }
             }
+
+            // If the event is related to toolbox/flyout, fix the flyout height
+            if (event.type === Blockly.Events.TOOLBOX_ITEM_SELECT) {
+                fixFlyoutHeight();
+            }
         });
 
-        // Custom CSS for kid-friendly styling
-        const styleTag = document.createElement('style');
-        styleTag.innerHTML = `
-            /* Make the blocks more rounded and kid-friendly */
-            .blocklyPath {
-                filter: drop-shadow(2px 2px 5px rgba(0,0,0,0.3));
-            }
-            
-            /* Make the blocks more rounded */
-            .blocklyPathLight, 
-            .blocklyPathDark {
-                stroke-width: 1 !important;
-            }
-            
-            /* Make the text in blocks larger and more readable */
-            .blocklyText {
-                font-family: 'Fredoka', 'Comic Sans MS', sans-serif !important;
-                font-size: 14px !important;
-                fill: white !important;
-            }
-            
-            /* Make the dropdown fields more kid-friendly */
-            .blocklyDropdownRect {
-                rx: 10px !important;
-                ry: 10px !important;
-            }
-            
-            /* Customize toolbox styles to connect directly to top bar */
-            .blocklyToolboxDiv {
-                background-color: rgba(18, 24, 58, 0.9) !important;
-                backdrop-filter: blur(8px) !important;
-                color: #ffffff !important;
-                width: 240px !important;
-                overflow-y: auto !important;
-                top: 60px !important; /* Start at the bottom of the top bar */
-                height: calc(100% - 60px) !important; /* Height minus top bar */
-                box-sizing: border-box !important;
-                border: none !important;
-                box-shadow: 3px 0 15px rgba(0, 0, 0, 0.3) !important;
-                border-radius: 0 !important;
-                font-size: 14px !important;
-                font-family: 'Fredoka', 'Comic Sans MS', sans-serif !important;
-                z-index: 9999 !important; /* Just below the top bar */
-            }
-            
-            /* Make flyout start at the correct position */
-            .blocklyFlyout {
-                top: 60px !important;
-                z-index: 9998 !important;
-            }
-            
-            /* Ensure flyout contents are properly positioned */
-            .blocklyFlyoutContent {
-                margin-top: 0 !important;
-                padding-top: 0 !important;
-            }
-            
-            /* Fix the workspace position */
-            .blocklyWorkspace {
-                top: 0 !important; 
-            }
-            
-            /* Make toolbox visually connect to top bar */
-            .blocklyToolboxDiv::before {
-                content: '';
-                position: absolute;
-                top: -1px; /* Slight overlap to avoid gap */
-                left: 0;
-                width: 100%;
-                height: 1px;
-                background-color: rgba(18, 24, 58, 0.9);
-                z-index: 10000;
-            }
-            
-            /* Toolbox categories */
-            .blocklyTreeRow {
-                border-radius: 12px !important;
-                margin: 6px 8px !important;
-                padding: 8px 12px !important;
-                transition: all 0.2s ease !important;
-            }
-            
-            .blocklyTreeRow:hover {
-                background-color: rgba(99, 102, 241, 0.2) !important;
-                transform: translateX(5px) !important;
-            }
-            
-            .blocklyTreeSelected {
-                background-color: rgba(99, 102, 241, 0.3) !important;
-            }
-            
-            /* Make all tree labels white */
-            .blocklyTreeLabel {
-                font-family: 'Fredoka', 'Comic Sans MS', sans-serif !important;
-                font-size: 15px !important;
-                font-weight: 500 !important;
-                color: white !important;
-                fill: white !important;
-            }
-            
-            /* Make the blockly workspace transparent */
-            .blocklyMainBackground {
-                fill: rgba(10, 10, 41, 0.7) !important;
-            }
-            
-            /* Make the selected blocks pop with a glow */
-            .blocklySelected > .blocklyPath {
-                filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.5)) !important;
-                stroke: #818cf8 !important;
-                stroke-width: 3px !important;
-            }
-            
-            /* Connection animation */
-            @keyframes pulse {
-                0% { opacity: 0.7; transform: scale(0.9); box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
-                50% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 15px rgba(255, 255, 255, 0.9); }
-                100% { opacity: 0.7; transform: scale(0.9); box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
-            }
-            
-            /* Make the block field text also white */
-            .blocklyEditableText > text {
-                fill: white !important;
-            }
-            
-            .blocklyDropdownText {
-                fill: white !important;
-            }
-            
-            /* Make sure all text in the workspace is white */
-            .blocklyFlyoutLabelText {
-                fill: white !important;
-            }
-            
-            .blocklyFlyoutButton > text {
-                fill: white !important;
-            }
-            
-            /* Animated background elements */
-            @keyframes rotate-galaxy {
-                0% { transform: rotate(0deg) scale(1); }
-                50% { transform: rotate(180deg) scale(1.1); }
-                100% { transform: rotate(360deg) scale(1); }
-            }
-            
-            @keyframes drift-galaxy {
-                0% { background-position: 0% 0%; }
-                50% { background-position: 20% 10%; }
-                100% { background-position: 0% 0%; }
-            }
-            
-            @keyframes twinkle-stars {
-                0%, 100% { opacity: 0.7; }
-                50% { opacity: 1; }
-            }
-            
-            @keyframes parallax-stars {
-                0% { transform: translateY(0) translateX(0); }
-                25% { transform: translateY(-5px) translateX(5px); }
-                50% { transform: translateY(-10px) translateX(0); }
-                75% { transform: translateY(-5px) translateX(-5px); }
-                100% { transform: translateY(0) translateX(0); }
-            }
-            
-            @keyframes nebula-glow {
-                0% { opacity: 0.5; filter: hue-rotate(0deg); }
-                33% { opacity: 0.7; filter: hue-rotate(30deg); }
-                66% { opacity: 0.6; filter: hue-rotate(60deg); }
-                100% { opacity: 0.5; filter: hue-rotate(0deg); }
-            }
-            
-            /* Background stars that twinkle */
-            .twinkling-stars-1 {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                width: 100%;
-                height: 100%;
-                background-image: 
-                    radial-gradient(white, rgba(255,255,255,.3) 1px, transparent 2px),
-                    radial-gradient(white, rgba(255,255,255,.2) 1px, transparent 1px);
-                background-size: 300px 300px, 200px 200px;
-                background-position: 20px 20px, 50px 50px;
-                animation: twinkle-stars 4s infinite alternate;
-                z-index: -1;
-            }
-            
-            /* Larger stars with different timing */
-            .twinkling-stars-2 {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                width: 100%;
-                height: 100%;
-                background-image: 
-                    radial-gradient(white, rgba(255,255,255,.4) 2px, transparent 3px),
-                    radial-gradient(white, rgba(255,255,255,.3) 1px, transparent 2px);
-                background-size: 400px 400px, 300px 300px;
-                background-position: 100px 150px, 200px 250px;
-                animation: twinkle-stars 6s infinite alternate-reverse;
-                z-index: -1;
-            }
-            
-            /* Distant stars with parallax */
-            .parallax-stars {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                width: 100%;
-                height: 100%;
-                background-image: 
-                    radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 2px),
-                    radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 1px),
-                    radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 2px);
-                background-size: 550px 550px, 350px 350px, 250px 250px;
-                background-position: 0 0, 40px 60px, 130px 270px;
-                animation: parallax-stars 15s infinite ease-in-out;
-                z-index: -2;
-            }
-            
-            /* Main galaxy background with rotation */
-            .rotating-galaxy-1 {
-                position: fixed;
-                top: -20%;
-                left: -20%;
-                width: 140%;
-                height: 140%;
-                background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=2832&auto=format&fit=crop');
-                background-size: cover;
-                background-position: center center;
-                opacity: 0.8;
-                animation: rotate-galaxy 120s infinite linear;
-                z-index: -4;
-            }
-            
-            /* Second galaxy layer rotating opposite direction */
-            .rotating-galaxy-2 {
-                position: fixed;
-                top: -30%;
-                left: -30%;
-                width: 160%;
-                height: 160%;
-                background-image: url('https://images.unsplash.com/photo-1506703719100-a0b3a494befc?q=80&w=2070&auto=format&fit=crop');
-                background-size: cover;
-                background-position: center center;
-                opacity: 0.3;
-                animation: rotate-galaxy 180s infinite linear reverse;
-                z-index: -3;
-                mix-blend-mode: screen;
-            }
-            
-            /* Colorful nebula overlay */
-            .nebula-glow {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: 
-                    radial-gradient(circle at 30% 20%, rgba(147, 51, 234, 0.3) 0%, transparent 50%),
-                    radial-gradient(circle at 80% 40%, rgba(236, 72, 153, 0.2) 0%, transparent 60%),
-                    radial-gradient(circle at 10% 70%, rgba(6, 182, 212, 0.2) 0%, transparent 50%);
-                animation: nebula-glow 20s infinite ease-in-out;
-                mix-blend-mode: screen;
-                z-index: -2;
-            }
-        `;
-        document.head.appendChild(styleTag);
+        // Modify flyout height after initialization
+        setTimeout(fixFlyoutHeight, 500);
 
-        // Resize to ensure proper sizing
-        Blockly.svgResize(workspace);
+        // Add click listeners to ensure categories expand correctly
+        setTimeout(() => {
+            const categories = document.querySelectorAll('.blocklyTreeRow');
+            categories.forEach(category => {
+                category.addEventListener('click', () => {
+                    // Fix flyout height after a category is clicked
+                    setTimeout(fixFlyoutHeight, 100);
 
-        // Window resize handler
-        const handleResize = () => {
+                    // Additional fix with another delay to catch any late rendering
+                    setTimeout(fixFlyoutHeight, 500);
+                });
+            });
+        }, 1000);
+
+        // Resize workspace to ensure everything fits correctly
+        window.addEventListener('resize', () => {
             if (workspaceRef.current) {
                 Blockly.svgResize(workspaceRef.current);
+                fixFlyoutHeight();
             }
-        };
-
-        window.addEventListener('resize', handleResize);
+        });
 
         return () => {
-            window.removeEventListener('resize', handleResize);
-            if (styleTag.parentNode) {
-                document.head.removeChild(styleTag);
-            }
+            window.removeEventListener('resize', () => { });
             if (workspaceRef.current) {
                 workspaceRef.current.dispose();
             }
@@ -843,10 +1086,10 @@ export default function UniTechEditor() {
             overflow: 'hidden',
             zIndex: 1
         }}>
-            {/* Animated Galaxy Background */}
+            {/* Animated Galaxy Background Layers */}
             <div className="rotating-galaxy-1"></div>
             <div className="rotating-galaxy-2"></div>
-            <div className="nebula-glow"></div>
+            <div className="nebula-layer"></div>
             <div className="parallax-stars"></div>
             <div className="twinkling-stars-1"></div>
             <div className="twinkling-stars-2"></div>
@@ -1183,10 +1426,34 @@ export default function UniTechEditor() {
                     top: '0px',
                     left: '0px',
                     width: 'calc(100% - 300px)', // Full width minus right panel
-                    height: '100%',
-                    fontFamily: "'Fredoka', 'Comic Sans MS', sans-serif"
+                    height: '100vh' // Use viewport height for consistency
                 }}
             ></div>
+
+            {/* Button to test scrolling to bottom of flyout - for debugging */}
+            <button
+                onClick={() => {
+                    const flyout = document.querySelector('.blocklyFlyout');
+                    if (flyout) {
+                        flyout.scrollTop = flyout.scrollHeight;
+                    }
+                }}
+                style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    left: '250px',
+                    zIndex: 10000,
+                    padding: '5px 10px',
+                    backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    display: 'none' // Hidden by default, unhide for debugging
+                }}
+            >
+                Scroll to Bottom
+            </button>
         </div>
     );
 }
